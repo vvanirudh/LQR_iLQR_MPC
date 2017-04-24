@@ -54,14 +54,14 @@ def cost_inter(env, x, u):
     """
     action_dim = u.shape[0]
     state_dim = x.shape[0]
+    mult = 10
+    goal = env.goal
+    l = np.linalg.norm(u)**2 + mult * np.linalg.norm(x - goal)**2
 
-    l = np.linalg.norm(u)**2
-
-    l_x = np.zeros(state_dim)
-    l_xx = np.zeros((state_dim, state_dim))
+    l_x = np.zeros(state_dim) + 2 * mult * (x - goal)
+    l_xx = np.zeros((state_dim, state_dim)) + 2 * mult
     l_u = 2*u
-    # l_uu = 2*np.ones((action_dim, action_dim))
-    l_uu = 2 * np.eye(action_dim)
+    l_uu = 2*np.eye(action_dim)
     l_ux = np.zeros((action_dim, state_dim))
     return l, l_x, l_xx, l_u, l_uu, l_ux
 
@@ -86,9 +86,8 @@ def cost_final(env, x):
     state_dim = x.shape[0]
     mult = 1e4
     goal = env.goal
-    l = mult * (np.linalg.norm(x - goal)**2)
+    l = mult * np.linalg.norm(x - goal)**2
     l_x = mult * 2 * (x - goal)
-    # l_xx = mult * 2 * np.ones((state_dim, state_dim))
     l_xx = mult * 2 * np.eye(state_dim)
     return l, l_x, l_xx
 
@@ -148,9 +147,11 @@ def calc_ilqr_input(env, sim_env, tN=50, max_iter=1e6):
     lam = 1.0  # regularization parameter
     alpha = 0.1  # line search parameter
     eps = 0.001  # convergence check parameter
-    lam_update = 10  # lambda update parameter
-    lam_max = 10000  # Lambda maximum parameter
+    lam_update = 2  # lambda update parameter
+    alpha_update = 0.01  # alpha update parameter
+    lam_max = 100000  # Lambda maximum parameter
     forward_pass = True
+    lambda_pass = True
 
     for iteration in range(int(max_iter)):
 
@@ -182,36 +183,38 @@ def calc_ilqr_input(env, sim_env, tN=50, max_iter=1e6):
             l[tN-1], lx[tN-1], lxx[tN-1] = cost_final(env, X[tN-1])
             forward_pass = False
 
-        # Compute gain
-        V = l[tN-1]
-        Vx = lx[tN-1]
-        Vxx = lxx[tN-1]
-        k = np.zeros((tN, action_dim))
-        K = np.zeros((tN, action_dim, state_dim))
+        if lambda_pass:
+            # Compute gain
+            V = l[tN-1]
+            Vx = lx[tN-1]
+            Vxx = lxx[tN-1]
+            k = np.zeros((tN, action_dim))
+            K = np.zeros((tN, action_dim, state_dim))
 
-        for tstep in range(tN-2, -1, -1):
-            Qx = lx[tstep] + np.dot(fx[tstep].T, Vx)
-            Qu = lu[tstep] + np.dot(fu[tstep].T, Vx)
-            Qxx = lxx[tstep] + np.dot(fx[tstep].T, np.dot(Vxx, fx[tstep]))
-            Qux = lux[tstep] + np.dot(fu[tstep].T, np.dot(Vxx, fx[tstep]))
-            Quu = luu[tstep] + np.dot(fu[tstep].T, np.dot(Vxx, fu[tstep]))
+            for tstep in range(tN-2, -1, -1):
+                Qx = lx[tstep] + np.dot(fx[tstep].T, Vx)
+                Qu = lu[tstep] + np.dot(fu[tstep].T, Vx)
+                Qxx = lxx[tstep] + np.dot(fx[tstep].T, np.dot(Vxx, fx[tstep]))
+                Qux = lux[tstep] + np.dot(fu[tstep].T, np.dot(Vxx, fx[tstep]))
+                Quu = luu[tstep] + np.dot(fu[tstep].T, np.dot(Vxx, fu[tstep]))
 
-            # SVD stuff
-            # U_svd, S, V_svd = np.linalg.svd(Quu)
-            # S[S < 0] = 0
-            # S += lam
-            # Quu_inv = np.dot(U_svd, np.dot(np.diag(1.0/S), V_svd.T))
+                # SVD stuff
+                # U_svd, S, V_svd = np.linalg.svd(Quu)
+                # S[S < 0] = 0
+                # S += lam
+                # Quu_inv = np.dot(U_svd, np.dot(np.diag(1.0/S), V_svd.T))
 
-            Quu_eigvalues, Quu_eigvectors = np.linalg.eig(Quu)
-            Quu_eigvalues[Quu_eigvalues < 0] = 0.
-            Quu_eigvalues += lam
-            Quu_inv = np.dot(Quu_eigvectors, np.dot(np.diag(1.0/Quu_eigvalues), Quu_eigvectors.T))
+                Quu_eigvalues, Quu_eigvectors = np.linalg.eig(Quu)
+                Quu_eigvalues[Quu_eigvalues < 0] = 0.
+                Quu_eigvalues += lam
+                Quu_inv = np.dot(Quu_eigvectors, np.dot(np.diag(1.0/Quu_eigvalues), Quu_eigvectors.T))
 
-            k[tstep] = -1 * np.dot(Quu_inv, Qu)
-            K[tstep] = -1 * np.dot(Quu_inv, Qux)
+                k[tstep] = -1 * np.dot(Quu_inv, Qu)
+                K[tstep] = -1 * np.dot(Quu_inv, Qux)
 
-            Vx = Qx - np.dot(K[tstep].T, np.dot(Quu, k[tstep]))
-            Vxx = Qxx - np.dot(K[tstep].T, np.dot(Quu, K[tstep]))
+                Vx = Qx - np.dot(K[tstep].T, np.dot(Quu, k[tstep]))
+                Vxx = Qxx - np.dot(K[tstep].T, np.dot(Quu, K[tstep]))
+                lambda_pass = False
 
         # Update control signal
         U_updated = np.zeros((tN, action_dim))
@@ -228,7 +231,9 @@ def calc_ilqr_input(env, sim_env, tN=50, max_iter=1e6):
             lam = lam / lam_update
             U = np.copy(U_updated)
             oldcost = np.copy(newcost)
+            alpha = 0.1
             forward_pass = True
+            lambda_pass = True
 
             # Check convergence
             if abs(newcost - oldcost) / oldcost < eps:
@@ -236,9 +241,18 @@ def calc_ilqr_input(env, sim_env, tN=50, max_iter=1e6):
                 break
 
         else:
-            # Update lambda and do update again
+
+            # Update alpha first
+            # if alpha > 0.01:
+            #    alpha = alpha - alpha_update
+            #    forward_pass = False
+            #    lambda_pass = False
+            #else:
+                # Update lambda and do update again
             lam *= lam_update
+            alpha = 0.1
             forward_pass = False
+            lambda_pass = True
 
             if lam > lam_max:
                 print 'Lambda max reached'

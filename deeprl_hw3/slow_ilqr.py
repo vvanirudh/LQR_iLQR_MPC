@@ -60,8 +60,7 @@ def cost_inter(env, x, u):
     l_x = np.zeros(state_dim)
     l_xx = np.zeros((state_dim, state_dim))
     l_u = 2*u
-    # l_uu = 2*np.ones((action_dim, action_dim))
-    l_uu = 2 * np.eye(action_dim)
+    l_uu = 2*np.eye(action_dim)
     l_ux = np.zeros((action_dim, state_dim))
     return l, l_x, l_xx, l_u, l_uu, l_ux
 
@@ -88,7 +87,6 @@ def cost_final(env, x):
     goal = env.goal
     l = mult * (np.linalg.norm(x - goal)**2)
     l_x = mult * 2 * (x - goal)
-    # l_xx = mult * 2 * np.ones((state_dim, state_dim))
     l_xx = mult * 2 * np.eye(state_dim)
     return l, l_x, l_xx
 
@@ -146,10 +144,11 @@ def calc_ilqr_input(env, sim_env, tN=50, max_iter=1e6):
 
     U = np.zeros((tN, action_dim))
     lam = 1.0  # regularization parameter
-    alpha = 0.1  # line search parameter
+    alpha = 1  # line search parameter
     eps = 0.001  # convergence check parameter
-    lam_update = 10  # lambda update parameter
-    lam_max = 10000  # Lambda maximum parameter
+    alpha_update = 0.01
+    # lam_update = 10  # lambda update parameter
+    # lam_max = 1000  # Lambda maximum parameter
     forward_pass = True
 
     for iteration in range(int(max_iter)):
@@ -202,10 +201,12 @@ def calc_ilqr_input(env, sim_env, tN=50, max_iter=1e6):
             # S += lam
             # Quu_inv = np.dot(U_svd, np.dot(np.diag(1.0/S), V_svd.T))
 
-            Quu_eigvalues, Quu_eigvectors = np.linalg.eig(Quu)
-            Quu_eigvalues[Quu_eigvalues < 0] = 0.
-            Quu_eigvalues += lam
-            Quu_inv = np.dot(Quu_eigvectors, np.dot(np.diag(1.0/Quu_eigvalues), Quu_eigvectors.T))
+            # Quu_eigvalues, Quu_eigvectors = np.linalg.eig(Quu)
+            # Quu_eigvalues[Quu_eigvalues < 0] = 0.
+            # Quu_eigvalues += lam
+            # Quu_inv = np.dot(Quu_eigvectors, np.dot(np.diag(1.0/Quu_eigvalues), Quu_eigvectors.T))
+
+            Quu_inv = np.linalg.pinv(Quu + lam*np.eye(Quu.shape[0]))
 
             k[tstep] = -1 * np.dot(Quu_inv, Qu)
             K[tstep] = -1 * np.dot(Quu_inv, Qux)
@@ -215,7 +216,7 @@ def calc_ilqr_input(env, sim_env, tN=50, max_iter=1e6):
 
         # Update control signal
         U_updated = np.zeros((tN, action_dim))
-        x_updated = x0
+        x_updated = np.copy(x0)
         for tstep in range(tN-1):
             U_updated[tstep] = U[tstep] + alpha * k[tstep] + np.dot(K[tstep], x_updated - X[tstep])
             x_updated = simulate_dynamics_next(sim_env, x_updated, U_updated[tstep])
@@ -225,23 +226,24 @@ def calc_ilqr_input(env, sim_env, tN=50, max_iter=1e6):
 
         # Compare costs
         if newcost < oldcost:
-            lam = lam / lam_update
+            # lam = lam / lam_update
             U = np.copy(U_updated)
             oldcost = np.copy(newcost)
             forward_pass = True
 
             # Check convergence
             if abs(newcost - oldcost) / oldcost < eps:
-                # print 'Converged'
+                print 'Converged'
                 break
 
         else:
             # Update lambda and do update again
-            lam *= lam_update
+            # lam *= lam_update
+            alpha = alpha - alpha_update
             forward_pass = False
 
-            if lam > lam_max:
-                print 'Lambda max reached'
+            if alpha < 0:
+                print 'alpha going less than zero'
                 break
 
     return U, oldcost

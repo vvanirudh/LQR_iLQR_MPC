@@ -1,7 +1,7 @@
 """LQR, iLQR and MPC."""
 
 import numpy as np
-import scipy
+from scipy import linalg
 
 
 def simulate_dynamics(env, x, u, dt=1e-5):
@@ -30,11 +30,12 @@ def simulate_dynamics(env, x, u, dt=1e-5):
       your LQR controller.
     """
     # Set state
-    env.state(x)
+    env.state = np.copy(x)
     # Take a step
-    new_x = env._step(u, dt)
+    new_x, _, _, _ = env._step(u, dt)
+    xnew = np.copy(new_x)
     # Compute xdot
-    xdot = (new_x - x) / (dt)
+    xdot = (xnew - x) / (dt)
     return xdot
 
 
@@ -137,20 +138,21 @@ def calc_lqr_input(env, sim_env):
       The command to execute at this point.
     """
     # Get state of the environment
-    x = env.state()
+    x = env.state
     # Get A and B
-    x_sim = x.copy()
+    x_sim = np.copy(x)
     # TODO: what control input to use when simulating dynamics?
     u_sim = np.ones((2,))
     A = approximate_A(sim_env, x_sim, u_sim)
+    x_sim = np.copy(x)
     B = approximate_B(sim_env, x_sim, u_sim)
 
     # Solve ricatti
-    P = scipy.linalg.solve_continuous_are(A, B, env.Q, env.R)
+    P = linalg.solve_continuous_are(A, B, env.Q, env.R)
     K = np.dot(np.linalg.pinv(env.R), np.dot(B.T, P))
 
     # Compute state difference
-    x_diff = x - env.goal()
+    x_diff = x - env.goal
 
     # Compute u
     u = -np.dot(K, x_diff)
