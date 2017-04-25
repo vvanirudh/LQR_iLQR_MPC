@@ -38,9 +38,10 @@ def run_lqr_controller(env, render_flag, sim_env):
 
 def main():
     # Create environment
-    env = gym.make('TwoLinkArm-limited-torque-random-goal-v1')
-    sim_env = gym.make('TwoLinkArm-limited-torque-random-goal-v1')
-    # env = gym.make('TwoLinkArm-limited-torque-v0')
+    # env = gym.make('TwoLinkArm-limited-torque-random-goal-v1')
+    # sim_env = gym.make('TwoLinkArm-limited-torque-random-goal-v1')
+    env = gym.make('TwoLinkArm-limited-torque-v0')
+    sim_env = gym.make('TwoLinkArm-limited-torque-v0')
 
     render_flag = True
 

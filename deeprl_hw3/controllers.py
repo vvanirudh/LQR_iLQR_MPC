@@ -137,22 +137,25 @@ def calc_lqr_input(env, sim_env):
     u: np.array
       The command to execute at this point.
     """
+    dt = 1e-5
+    delta = 1e-5
     # Get state of the environment
-    x = env.state
+    x = np.copy(env.state)
     # Get A and B
     x_sim = np.copy(x)
     # TODO: what control input to use when simulating dynamics?
-    u_sim = np.ones((2,))
-    A = approximate_A(sim_env, x_sim, u_sim)
+    u_sim = np.zeros((2,))
+    A = approximate_A(sim_env, x_sim, u_sim, delta, dt)
     x_sim = np.copy(x)
-    B = approximate_B(sim_env, x_sim, u_sim)
+    u_sim = np.zeros((2,))
+    B = approximate_B(sim_env, x_sim, u_sim, delta, dt)
 
     # Solve ricatti
-    P = linalg.solve_continuous_are(A, B, env.Q, env.R)
-    K = np.dot(np.linalg.pinv(env.R), np.dot(B.T, P))
+    P = linalg.solve_continuous_are(A, B, np.copy(env.Q), np.copy(env.R))
+    K = np.dot(np.linalg.pinv(np.copy(env.R)), np.dot(B.T, P))
 
     # Compute state difference
-    x_diff = x - env.goal
+    x_diff = x - np.copy(env.goal)
 
     # Compute u
     u = -np.dot(K, x_diff)

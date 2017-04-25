@@ -33,7 +33,7 @@ def run_ilqr_controller(env, render_flag, sim_env, tN):
             dq.append(env.dq)
             if render_flag:
                 env.render()
-                # time.sleep(0.01)
+                time.sleep(0.01)
 
             total_reward += reward
             num_steps += 1
