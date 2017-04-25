@@ -1,6 +1,6 @@
 import deeprl_hw3.arm_env as arm_env
 import deeprl_hw3.controllers as controllers
-import deeprl_hw3.ilqr as ilqr
+import deeprl_hw3.fast_ilqr as ilqr
 import gym
 import numpy as np
 import time

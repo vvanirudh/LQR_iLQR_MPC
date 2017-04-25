@@ -25,7 +25,7 @@ def simulate_dynamics_next(env, x, u):
     next_x: np.array
     """
     # set state
-    env.state = x
+    env.state = np.copy(x)
     # Take a step
     new_x, _, _, _ = env._step(u, env.dt)
     return new_x
@@ -54,14 +54,17 @@ def cost_inter(env, x, u):
     """
     action_dim = u.shape[0]
     state_dim = x.shape[0]
-    mult = 10
+    mult = 0
+    u_mult = 1
     goal = env.goal
-    l = np.linalg.norm(u)**2 + mult * np.linalg.norm(x - goal)**2
+    l = u_mult * np.linalg.norm(u)**2 + mult * np.linalg.norm(x[:state_dim/2] - goal[:state_dim/2])**2
 
-    l_x = np.zeros(state_dim) + 2 * mult * (x - goal)
-    l_xx = np.zeros((state_dim, state_dim)) + 2 * mult
-    l_u = 2*u
-    l_uu = 2*np.eye(action_dim)
+    l_x = np.zeros(state_dim)
+    l_x[:state_dim/2] = 2 * mult * (x[:state_dim/2] - goal[:state_dim/2])
+    l_xx = np.zeros((state_dim, state_dim))
+    l_xx[:state_dim/2, :state_dim/2] = 2 * mult * np.eye(state_dim/2)
+    l_u = 2 * u_mult * u
+    l_uu = 2 * u_mult * np.eye(action_dim)
     l_ux = np.zeros((action_dim, state_dim))
     return l, l_x, l_xx, l_u, l_uu, l_ux
 
@@ -85,10 +88,15 @@ def cost_final(env, x):
     """
     state_dim = x.shape[0]
     mult = 1e4
+    vel_mult = 10
     goal = env.goal
-    l = mult * np.linalg.norm(x - goal)**2
-    l_x = mult * 2 * (x - goal)
-    l_xx = mult * 2 * np.eye(state_dim)
+    l = mult * np.linalg.norm(x[:state_dim/2] - goal[:state_dim/2])**2 + vel_mult * np.linalg.norm(x[state_dim/2:] - goal[state_dim/2:])**2
+    l_x = np.zeros(state_dim)
+    l_x[:state_dim/2] = mult * 2 * (x[:state_dim/2] - goal[:state_dim/2])
+    l_x[state_dim/2:] = vel_mult * 2 * (x[state_dim/2:] - goal[state_dim/2:])
+    l_xx = np.eye(state_dim)
+    l_xx[:state_dim/2, :state_dim/2] *= mult * 2
+    l_xx[state_dim/2:, state_dim/2:] *= vel_mult * 2
     return l, l_x, l_xx
 
 
@@ -98,14 +106,14 @@ def simulate(env, x0, U):
     and control inputs U
     """
     # Set initial state
-    env.state = x0
+    # env.state = x0
     tN = U.shape[0]
     d = x0.shape[0]
     X = np.zeros((tN, d))
     X[0, :] = np.copy(x0)
     cost = 0
     for i in range(tN-1):
-        new_x = simulate_dynamics_next(env, X[i, :], U[i, :])# env._step(U[i, :])
+        new_x = simulate_dynamics_next(env, X[i, :], U[i, :])  # env._step(U[i, :])
         X[i+1, :] = np.copy(new_x)
         l, _, _, _, _, _ = cost_inter(env, X[i, :], U[i, :])
         cost = cost + l * env.dt
@@ -147,9 +155,9 @@ def calc_ilqr_input(env, sim_env, tN=50, max_iter=1e6):
     lam = 1.0  # regularization parameter
     alpha = 0.1  # line search parameter
     eps = 0.001  # convergence check parameter
-    lam_update = 2  # lambda update parameter
+    lam_update = 10  # lambda update parameter
     alpha_update = 0.01  # alpha update parameter
-    lam_max = 100000  # Lambda maximum parameter
+    lam_max = 10000  # Lambda maximum parameter
     forward_pass = True
     lambda_pass = True
 
@@ -185,9 +193,9 @@ def calc_ilqr_input(env, sim_env, tN=50, max_iter=1e6):
 
         if lambda_pass:
             # Compute gain
-            V = l[tN-1]
-            Vx = lx[tN-1]
-            Vxx = lxx[tN-1]
+            V = np.copy(l[tN-1])
+            Vx = np.copy(lx[tN-1])
+            Vxx = np.copy(lxx[tN-1])
             k = np.zeros((tN, action_dim))
             K = np.zeros((tN, action_dim, state_dim))
 
@@ -218,7 +226,7 @@ def calc_ilqr_input(env, sim_env, tN=50, max_iter=1e6):
 
         # Update control signal
         U_updated = np.zeros((tN, action_dim))
-        x_updated = x0
+        x_updated = np.copy(x0)
         for tstep in range(tN-1):
             U_updated[tstep] = U[tstep] + alpha * k[tstep] + np.dot(K[tstep], x_updated - X[tstep])
             x_updated = simulate_dynamics_next(sim_env, x_updated, U_updated[tstep])
@@ -230,15 +238,17 @@ def calc_ilqr_input(env, sim_env, tN=50, max_iter=1e6):
         if newcost < oldcost:
             lam = lam / lam_update
             U = np.copy(U_updated)
-            oldcost = np.copy(newcost)
+            # oldcost = np.copy(newcost)
             alpha = 0.1
             forward_pass = True
             lambda_pass = True
 
             # Check convergence
             if abs(newcost - oldcost) / oldcost < eps:
-                # print 'Converged'
+                print 'Converged at iteration:', iteration
                 break
+
+            oldcost = np.copy(newcost)
 
         else:
 
@@ -247,7 +257,7 @@ def calc_ilqr_input(env, sim_env, tN=50, max_iter=1e6):
             #    alpha = alpha - alpha_update
             #    forward_pass = False
             #    lambda_pass = False
-            #else:
+            # else:
                 # Update lambda and do update again
             lam *= lam_update
             alpha = 0.1
