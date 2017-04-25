@@ -146,6 +146,7 @@ def calc_ilqr_input(env, sim_env, tN=50, max_iter=1e6):
     dt = env.dt
 
     U = np.zeros((tN, action_dim))
+    cost_list = []
     lam = 1.0  # regularization parameter
     alpha = 0.1  # line search parameter
     eps = 0.001  # convergence check parameter
@@ -224,6 +225,7 @@ def calc_ilqr_input(env, sim_env, tN=50, max_iter=1e6):
         # Forward simulate to get cost
         X, cost = simulate(sim_env, x0, U_updated)
         newcost = np.copy(cost)
+        cost_list.append(np.copy(newcost))
 
         # Compare costs
         if newcost < oldcost:
@@ -250,4 +252,4 @@ def calc_ilqr_input(env, sim_env, tN=50, max_iter=1e6):
                 print 'Lambda max reached'
                 break
 
-    return U, oldcost
+    return U, cost_list
