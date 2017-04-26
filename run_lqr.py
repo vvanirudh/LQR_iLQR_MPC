@@ -18,7 +18,7 @@ def plotthem(q, dq, u, num_steps, total_reward):
     p1.plot(x, q1[:, 0])
     p1.plot(x, q1[:, 1])
     p1.legend([' = q[0]', ' = q[1]'], loc='upper right')
-    p1.set_title('Environment : '+ENV_NAME+'\n Total reward = '+str(total_reward)+' Number of steps= '+str(num_steps)+'\n\n q, vs number of steps')
+    p1.set_title('LQR Environment : '+ENV_NAME+'\n Total reward = '+str(total_reward)+' Number of steps= '+str(num_steps)+'\n\n q, vs number of steps')
 
     p2 = plt.subplot(312)
     p2.plot(x, dq1[:, 0])

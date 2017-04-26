@@ -55,10 +55,29 @@ def generate_expert_training_data(expert, env, num_episodes=100, render=True):
       second contains a one-hot encoding of all of the actions chosen
       by the expert for those states.
     """
-    return np.zeros((4,)), np.zeros((2,))
+    states = []
+    actions = []
+    for i in range(num_episodes):
+        state = env.reset()
+        if render:
+            env.render()
+            time.sleep(.1)
+        is_done = False
+        while not is_done:
+            action = np.argmax(
+                expert.predict_on_batch(state[np.newaxis, ...])[0])
+            states.append(state)
+            actions.append(action) 
+            state, reward, is_done, _ = env.step(action)
+            if render:
+                env.render()
+                time.sleep(.1)
+    max_action_value = np.max(actions) + 1
+    onehot_actions = np.eye(max_action_value)[actions]
+    states = np.array(states)
+    return states, onehot_actions
 
-
-def test_cloned_policy(env, cloned_policy, num_episodes=50, render=True):
+def test_cloned_policy(env, cloned_policy, num_episodes=100, render=True):
     """Run cloned policy and collect statistics on performance.
 
     Will print the rewards for each episode and the mean/std of all
@@ -100,6 +119,7 @@ def test_cloned_policy(env, cloned_policy, num_episodes=50, render=True):
 
     print('Average total reward: {} (std: {})'.format(
         np.mean(total_rewards), np.std(total_rewards)))
+    return  total_rewards, np.mean(total_rewards), np.std(total_rewards)
 
 
 def wrap_cartpole(env):
