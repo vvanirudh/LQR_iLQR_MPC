@@ -56,13 +56,19 @@ def cost_inter(env, x, u):
     action_dim = u.shape[0]
     state_dim = x.shape[0]
 
-    l = np.linalg.norm(u)**2
+    if np.array_equal(env.R, np.eye(2)):
+        # v1 env
+        mult = 1
+    else:
+        # v0 env
+        mult = 0.01
+    l = mult * np.linalg.norm(u)**2
 
     l_x = np.zeros(state_dim)
     l_xx = np.zeros((state_dim, state_dim))
-    l_u = 2*u
+    l_u = mult * 2 * u
     # l_uu = 2*np.ones((action_dim, action_dim))
-    l_uu = 2 * np.eye(action_dim)
+    l_uu = mult * 2 * np.eye(action_dim)
     l_ux = np.zeros((action_dim, state_dim))
     return l, l_x, l_xx, l_u, l_uu, l_ux
 
@@ -150,7 +156,7 @@ def calc_ilqr_input(env, sim_env, tN=50, max_iter=1e6):
     lam = 1.0  # regularization parameter
     alpha = 0.1  # line search parameter
     eps = 0.001  # convergence check parameter
-    lam_update = 10  # lambda update parameter
+    lam_update = 2  # lambda update parameter
     lam_max = 10000  # Lambda maximum parameter
     forward_pass = True
 

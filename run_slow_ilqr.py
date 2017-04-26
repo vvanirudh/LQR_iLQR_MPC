@@ -1,6 +1,6 @@
 import deeprl_hw3.arm_env as arm_env
 import deeprl_hw3.controllers as controllers
-import deeprl_hw3.ilqr as ilqr
+import deeprl_hw3.slow_ilqr as ilqr
 import gym
 import numpy as np
 import time
@@ -20,7 +20,7 @@ def plotthem(env_name, q, dq, u, num_steps, total_reward, total_cost):
     p1.plot(x, q1[:, 0])
     p1.plot(x, q1[:, 1])
     p1.legend([' = q[0]', ' = q[1]'], loc='upper right')
-    p1.set_title('MPC Environment : '+ENV_NAME+'\n Total reward = '+str(total_reward)+' Number of steps= '+str(num_steps)+'\n\n q, vs number of steps')
+    p1.set_title('ILQR Environment : '+ENV_NAME+'\n Total reward = '+str(total_reward)+' Number of steps= '+str(num_steps)+'\n\n q, vs number of steps')
 
     p2 = plt.subplot(412)
     p2.plot(x, dq1[:, 0])
@@ -37,10 +37,10 @@ def plotthem(env_name, q, dq, u, num_steps, total_reward, total_cost):
     p4 = plt.subplot(414)
     p4.plot(range(len(total_cost)), total_cost)
     p4.legend(['Cost of trajectory'], loc='upper right')
-    p4.set_title('Total cost vs ILQR iterations in MPC')
+    p4.set_title('Total cost vs ILQR iterations')
 
     # plt.show()
-    plt.savefig(env_name + '_mpc.png')
+    plt.savefig(env_name + '_ilqr.png')
     plt.gcf().clear()
     plt.close()
     return plt
@@ -50,7 +50,7 @@ def run_ilqr_controller(env, render_flag, sim_env, tN):
     env.reset()
     if render_flag:
         env.render()
-        time.sleep(0.01)
+        # time.sleep(0.01)
 
     total_reward = 0
     num_steps = 0
@@ -59,27 +59,36 @@ def run_ilqr_controller(env, render_flag, sim_env, tN):
     dq = [env.dq]
     u = []
     total_cost = []
+    terminal_flag = False
 
     while True:
-        U, cost = ilqr.calc_ilqr_input(env, sim_env, tN)
-        total_cost = total_cost + cost
+        U, cost_list = ilqr.calc_ilqr_input(env, sim_env, tN)
+        total_cost = total_cost + cost_list
 
-        action = U[0]
-        u.append(np.copy(action))
-        _, reward, is_terminal, _ = env._step(action)
-        q.append(np.copy(env.q))
-        dq.append(np.copy(env.dq))
-        if render_flag:
-            env.render()
-            time.sleep(0.01)
+        for i in range(tN):
+            action = U[i]
+            u.append(np.copy(action))
+            _, reward, is_terminal, _ = env._step(action)
+            q.append(np.copy(env.q))
+            dq.append(np.copy(env.dq))
+            if render_flag:
+                env.render()
+                time.sleep(0.01)
 
-        total_reward += reward
-        num_steps += 1
-        if is_terminal:
+            total_reward += reward
+            num_steps += 1
+            if is_terminal:
+                terminal_flag = True
+                break
+        if terminal_flag:
             break
     return q, dq, u, total_reward, num_steps, total_cost
 
 
+# ENV_NAME = 'TwoLinkArm-v0'
+# ENV_NAME = 'TwoLinkArm-limited-torque-v0'
+# ENV_NAME = 'TwoLinkArm-v1'
+# ENV_NAME = 'TwoLinkArm-limited-torque-v1'
 ENVS = ['TwoLinkArm-v0', 'TwoLinkArm-v1']
 
 for ENV_NAME in ENVS:
@@ -88,7 +97,7 @@ for ENV_NAME in ENVS:
     sim_env = gym.make(ENV_NAME)
 
     render_flag = True
-    tN = 10
+    tN = 100
 
     q, dq, u, total_reward, num_steps, total_cost = run_ilqr_controller(env, render_flag, sim_env, tN)
 
